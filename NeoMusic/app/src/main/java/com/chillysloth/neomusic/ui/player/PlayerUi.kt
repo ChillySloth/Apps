@@ -78,6 +78,7 @@ import com.chillysloth.neomusic.ui.components.NeoBox
 import com.chillysloth.neomusic.ui.components.NeoIconButton
 import com.chillysloth.neomusic.ui.components.NeoTag
 import com.chillysloth.neomusic.ui.components.PlainIconButton
+import com.chillysloth.neomusic.ui.components.ScrollbarBox
 import com.chillysloth.neomusic.ui.components.TrackMenu
 import com.chillysloth.neomusic.ui.theme.Neo
 import sh.calvin.reorderable.ReorderableItem
@@ -393,6 +394,7 @@ private fun QueueList(modifier: Modifier = Modifier) {
                 Text("${local.size} tracks", style = Neo.type.label, color = Neo.colors.onAccent)
             }
             Box(Modifier.fillMaxWidth().height(2.5.dp).background(Neo.colors.ink))
+            ScrollbarBox(listState, Modifier.fillMaxSize(), bottomPadding = 0.dp) {
             LazyColumn(state = listState, contentPadding = PaddingValues(vertical = 6.dp)) {
                 itemsIndexed(local, key = { i, id -> if (unique) id else "$i-$id" }) { i, id ->
                     val t = library.trackById[id]
@@ -409,7 +411,7 @@ private fun QueueList(modifier: Modifier = Modifier) {
                                     }
                                 )
                                 .clickable { app.player.skipToQueueIndex(i) }
-                                .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                                .padding(start = 12.dp, end = 22.dp, top = 6.dp, bottom = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Box(Modifier.size(42.dp).clip(RoundedCornerShape(8.dp)).border(2.dp, Neo.colors.ink, RoundedCornerShape(8.dp))) {
@@ -431,6 +433,7 @@ private fun QueueList(modifier: Modifier = Modifier) {
                         }
                     }
                 }
+            }
             }
         }
     }

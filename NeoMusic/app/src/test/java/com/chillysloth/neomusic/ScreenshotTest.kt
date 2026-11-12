@@ -58,6 +58,16 @@ class ScreenshotTest {
     @Test fun artistsTab_dark() = snap(dark = true) { HomeScreen(initialTab = 3) }
     @Test fun search_light() = snap(dark = false) { SearchScreen() }
     @Test fun album_light() = snap(dark = false) { AlbumScreen(10) }
+    // Track picker opened while a song is playing: the confirm bar must not be covered by the mini player.
+    @Test fun picker_whilePlaying() = snap(dark = false) { AppRoot(it, startDestination = "pick/2") }
+    @Test fun playlist_albumCover_light() = snap(dark = false) { PlaylistScreen(2) }
+    @Test fun coverDialog_light() = snap(dark = false) { app ->
+        val lib = app.repository.library.value
+        com.chillysloth.neomusic.ui.components.PlaylistCoverDialog(
+            samplePlaylists[1], listOf(12L, 11L, 10L).map { lib.albumById[it]!! },
+            onDismiss = {}, onGallery = {}, onAlbum = {}, onAutomatic = {},
+        )
+    }
     @Test fun playlist_dark() = snap(dark = true) { PlaylistScreen(1) }
     @Test fun details_light() = snap(dark = false) { TrackDetailsScreen(3) }
     @Test fun nowPlaying_light() = snap(dark = false, inset = 0) { app ->
@@ -126,6 +136,7 @@ class ScreenshotTest {
         override fun createPlaylist(initialTracks: List<Track>, openAfter: Boolean) = Unit
         override fun renamePlaylist(id: Long) = Unit
         override fun deletePlaylist(id: Long) = Unit
+        override fun changePlaylistCover(id: Long) = Unit
         override fun toast(message: String) = Unit
     }
 
@@ -157,7 +168,7 @@ class ScreenshotTest {
 
         val samplePlaylists = listOf(
             Playlist(1, "Morning Run", listOf(5, 1, 11, 12, 9, 3), 1, 5),
-            Playlist(2, "Rainy Sundays", listOf(6, 8, 2), 2, 4),
+            Playlist(2, "Rainy Sundays", listOf(6, 8, 2), 2, 4, coverAlbumId = 12),
             Playlist(3, "Fresh finds", emptyList(), 3, 3),
         )
     }

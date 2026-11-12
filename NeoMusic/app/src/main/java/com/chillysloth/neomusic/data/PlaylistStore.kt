@@ -1,6 +1,11 @@
 package com.chillysloth.neomusic.data
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
+import android.net.Uri
+import android.os.Build
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -9,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -17,9 +23,13 @@ import java.io.File
  * Playlists stored as a small JSON file in app storage. The list order in the file
  * is the user's custom playlist order.
  */
-class PlaylistStore(context: Context, private val scope: CoroutineScope) {
+class PlaylistStore(private val context: Context, private val scope: CoroutineScope) {
 
     private val file by lazy { File(context.filesDir, "playlists.json") }
+    private val coversDir by lazy { File(context.filesDir, "covers") }
+
+    /** Where a custom cover image named [name] lives. */
+    fun coverFile(name: String): File = File(coversDir, name)
     private val writeLock = Mutex()
 
     private val _playlists = MutableStateFlow<List<Playlist>>(emptyList())
@@ -46,6 +56,8 @@ class PlaylistStore(context: Context, private val scope: CoroutineScope) {
                 trackIds = (0 until ids.length()).map { ids.getLong(it) },
                 createdAt = o.optLong("created"),
                 modifiedAt = o.optLong("modified"),
+                coverAlbumId = if (o.has("coverAlbum")) o.getLong("coverAlbum") else null,
+                coverImage = o.optString("coverImage").takeIf { it.isNotEmpty() },
             )
         }
     }
@@ -63,6 +75,8 @@ class PlaylistStore(context: Context, private val scope: CoroutineScope) {
                         put("created", p.createdAt)
                         put("modified", p.modifiedAt)
                         put("tracks", JSONArray().apply { p.trackIds.forEach { put(it) } })
+                        p.coverAlbumId?.let { put("coverAlbum", it) }
+                        p.coverImage?.let { put("coverImage", it) }
                     })
                 }
                 val tmp = File(file.parentFile, file.name + ".tmp")
@@ -81,7 +95,76 @@ class PlaylistStore(context: Context, private val scope: CoroutineScope) {
 
     fun rename(id: Long, name: String) = edit(id) { it.copy(name = name.trim()) }
 
-    fun delete(id: Long) = update { list -> list.filterNot { it.id == id } }
+    fun delete(id: Long) {
+        _playlists.value.firstOrNull { it.id == id }?.coverImage?.let(::deleteCoverFile)
+        update { list -> list.filterNot { it.id == id } }
+    }
+
+    /** Uses an album's art as the cover. */
+    fun setCoverAlbum(id: Long, albumId: Long) = setCover(id, albumId = albumId, image = null)
+
+    /** Back to the automatic cover (mosaic of the playlist's albums). */
+    fun resetCover(id: Long) = setCover(id, albumId = null, image = null)
+
+    private fun setCover(id: Long, albumId: Long?, image: String?) {
+        val old = _playlists.value.firstOrNull { it.id == id }?.coverImage
+        edit(id) { it.copy(coverAlbumId = albumId, coverImage = image) }
+        if (old != null && old != image) deleteCoverFile(old)
+    }
+
+    private fun deleteCoverFile(name: String) {
+        scope.launch(Dispatchers.IO) { runCatching { coverFile(name).delete() } }
+    }
+
+    /**
+     * Copies a picked image into app storage as a square JPEG and makes it the cover.
+     * Returns false if the image couldn't be read.
+     */
+    suspend fun importCoverImage(id: Long, uri: Uri): Boolean {
+        val name = withContext(Dispatchers.IO) {
+            runCatching {
+                val square = decodeSquare(uri, 1000) ?: return@runCatching null
+                coversDir.mkdirs()
+                // Unique name per change, so cached images of the old cover are never reused.
+                val name = "playlist_${id}_${System.currentTimeMillis()}.jpg"
+                coverFile(name).outputStream().use { square.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+                square.recycle()
+                name
+            }.getOrNull()
+        } ?: return false
+        setCover(id, albumId = null, image = name)
+        return true
+    }
+
+    /** Decodes [uri] (respecting EXIF rotation on Android 9+), center-crops it square and caps it at [maxPx]. */
+    private fun decodeSquare(uri: Uri, maxPx: Int): Bitmap? {
+        val resolver = context.contentResolver
+        val bmp: Bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            ImageDecoder.decodeBitmap(ImageDecoder.createSource(resolver, uri)) { decoder, info, _ ->
+                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                val shortSide = minOf(info.size.width, info.size.height)
+                if (shortSide > maxPx) {
+                    val scale = maxPx.toFloat() / shortSide
+                    decoder.setTargetSize((info.size.width * scale).toInt(), (info.size.height * scale).toInt())
+                }
+            }
+        } else {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+            var sample = 1
+            while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxPx) sample *= 2
+            resolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
+            } ?: return null
+        }
+        val side = minOf(bmp.width, bmp.height)
+        val cropped = Bitmap.createBitmap(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side)
+        if (cropped !== bmp) bmp.recycle()
+        if (side <= maxPx) return cropped
+        val scaled = Bitmap.createScaledBitmap(cropped, maxPx, maxPx, true)
+        if (scaled !== cropped) cropped.recycle()
+        return scaled
+    }
 
     /** Adds tracks to the end of the playlist, skipping ones already in it. Returns number added. */
     fun addTracks(id: Long, trackIds: List<Long>): Int {

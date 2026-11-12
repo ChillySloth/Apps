@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.DarkMode
@@ -80,6 +82,7 @@ import com.chillysloth.neomusic.data.Playlist
 import com.chillysloth.neomusic.data.PlaylistSort
 import com.chillysloth.neomusic.data.ThemeMode
 import com.chillysloth.neomusic.data.TrackSort
+import com.chillysloth.neomusic.data.formatDuration
 import com.chillysloth.neomusic.data.formatLongDuration
 import com.chillysloth.neomusic.data.pluralAlbums
 import com.chillysloth.neomusic.data.pluralTracks
@@ -99,7 +102,9 @@ import com.chillysloth.neomusic.ui.components.NeoMenu
 import com.chillysloth.neomusic.ui.components.NeoMenuItem
 import com.chillysloth.neomusic.ui.components.PlainIconButton
 import com.chillysloth.neomusic.ui.components.PlaylistCover
+import com.chillysloth.neomusic.ui.components.ScrollbarBox
 import com.chillysloth.neomusic.ui.components.SortButton
+import com.chillysloth.neomusic.ui.components.initialOf
 import com.chillysloth.neomusic.ui.components.TrackRow
 import com.chillysloth.neomusic.ui.theme.Neo
 import kotlinx.coroutines.launch
@@ -304,7 +309,22 @@ private fun TracksTab(library: Library) {
         )
         return
     }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = bottomPadding()) {
+    val listState = rememberLazyListState()
+    // Bubble text while dragging the scrollbar follows the current sort (index 0 is the header).
+    val label: (Int) -> String? = { i ->
+        sorted.getOrNull(i - 1)?.let { t ->
+            when (sort.key) {
+                TrackSort.TITLE -> initialOf(t.title)
+                TrackSort.ARTIST -> initialOf(t.artist)
+                TrackSort.ALBUM -> initialOf(t.album)
+                TrackSort.YEAR -> t.year.takeIf { it > 0 }?.toString() ?: "#"
+                TrackSort.DATE_ADDED -> monthYear.format(java.util.Date(t.dateAddedSec * 1000))
+                TrackSort.DURATION -> formatDuration(t.durationMs)
+            }
+        }
+    }
+    ScrollbarBox(listState, Modifier.fillMaxSize(), label = label) {
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = bottomPadding()) {
         item(key = "header") {
             ListActionsHeader(
                 pluralTracks(sorted.size),
@@ -324,7 +344,10 @@ private fun TracksTab(library: Library) {
             )
         }
     }
+    }
 }
+
+private val monthYear = java.text.SimpleDateFormat("MMM yy", java.util.Locale.getDefault())
 
 // ---------------------------------------------------------------- Playlists
 
@@ -354,6 +377,9 @@ private fun PlaylistsTab(library: Library) {
         if (fromIdx >= 0 && toIdx >= 0) app.playlists.movePlaylist(fromIdx, toIdx)
     }
 
+    val label: ((Int) -> String?)? =
+        if (sort.key == PlaylistSort.NAME) ({ i -> sorted.getOrNull(i - 1)?.let { initialOf(it.name) } }) else null
+    ScrollbarBox(listState, Modifier.fillMaxSize(), label = label) {
     LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = bottomPadding()) {
         item(key = "header") {
             ListActionsHeader(
@@ -405,6 +431,7 @@ private fun PlaylistsTab(library: Library) {
             }
         }
     }
+    }
 }
 
 @Composable
@@ -429,7 +456,7 @@ private fun PlaylistRow(
     ) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             NeoBox(Modifier.size(60.dp), shape = RoundedCornerShape(Neo.dimens.radiusSmall), shadow = 0.dp, borderWidth = 2.dp) {
-                PlaylistCover(albumIds, p.id, Modifier.size(60.dp), sizeHint = 60.dp)
+                PlaylistCover(p, albumIds, Modifier.size(60.dp), sizeHint = 60.dp)
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
@@ -447,6 +474,7 @@ private fun PlaylistRow(
                     NeoMenuItem("Play", Icons.Rounded.PlayArrow, { open = false; onPlay() })
                     NeoMenuItem("Shuffle", Icons.Rounded.Shuffle, { open = false; onShuffle() })
                     NeoMenuItem("Rename", Icons.Rounded.Edit, { open = false; actions.renamePlaylist(p.id) })
+                    NeoMenuItem("Change cover", Icons.Rounded.AddPhotoAlternate, { open = false; actions.changePlaylistCover(p.id) })
                     NeoMenuItem("Delete playlist", Icons.Rounded.DeleteOutline, { open = false; actions.deletePlaylist(p.id) })
                 }
             }
@@ -475,8 +503,21 @@ private fun AlbumsTab(library: Library) {
         EmptyState("No albums", "Albums appear once your music is scanned.", Icons.Rounded.Album, color = Neo.colors.green)
         return
     }
+    val gridState = rememberLazyGridState()
+    val label: (Int) -> String? = { i ->
+        sorted.getOrNull(i - 1)?.let { a ->
+            when (sort.key) {
+                AlbumSort.TITLE -> initialOf(a.title)
+                AlbumSort.ARTIST -> initialOf(a.artist)
+                AlbumSort.YEAR -> a.year.takeIf { it > 0 }?.toString() ?: "#"
+                AlbumSort.TRACK_COUNT -> a.tracks.size.toString()
+            }
+        }
+    }
+    ScrollbarBox(gridState, Modifier.fillMaxSize(), label = label) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(150.dp),
+        state = gridState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 14.dp, end = 18.dp, bottom = LocalBottomInset.current + 16.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -504,6 +545,7 @@ private fun AlbumsTab(library: Library) {
             }
         }
     }
+    }
 }
 
 // ---------------------------------------------------------------- Artists
@@ -525,7 +567,18 @@ private fun ArtistsTab(library: Library) {
         EmptyState("No artists", "Artists appear once your music is scanned.", Icons.Rounded.Person, color = Neo.colors.blue)
         return
     }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = bottomPadding()) {
+    val listState = rememberLazyListState()
+    val label: (Int) -> String? = { i ->
+        sorted.getOrNull(i - 1)?.let { a ->
+            when (sort.key) {
+                ArtistSort.NAME -> initialOf(a.name)
+                ArtistSort.TRACK_COUNT -> a.tracks.size.toString()
+                ArtistSort.ALBUM_COUNT -> a.albums.size.toString()
+            }
+        }
+    }
+    ScrollbarBox(listState, Modifier.fillMaxSize(), label = label) {
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = bottomPadding()) {
         item(key = "header") {
             ListActionsHeader(
                 if (sorted.size == 1) "1 artist" else "${sorted.size} artists",
@@ -558,6 +611,7 @@ private fun ArtistsTab(library: Library) {
                 Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Neo.colors.text)
             }
         }
+    }
     }
 }
 

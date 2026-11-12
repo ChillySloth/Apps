@@ -4,6 +4,7 @@ import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.AnimationSpec
@@ -48,6 +49,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.chillysloth.neomusic.NeoMusicApp
@@ -56,6 +58,7 @@ import com.chillysloth.neomusic.data.Track
 import com.chillysloth.neomusic.ui.components.AddToPlaylistDialog
 import com.chillysloth.neomusic.ui.components.ConfirmDialog
 import com.chillysloth.neomusic.ui.components.MessageBanner
+import com.chillysloth.neomusic.ui.components.PlaylistCoverDialog
 import com.chillysloth.neomusic.ui.components.TextInputDialog
 import com.chillysloth.neomusic.ui.player.MiniPlayer
 import com.chillysloth.neomusic.ui.player.MiniPlayerHeight
@@ -83,10 +86,11 @@ private sealed interface DialogState {
     data class RenamePlaylist(val id: Long, val current: String) : DialogState
     data class DeletePlaylist(val id: Long, val name: String) : DialogState
     data class DeleteTracks(val tracks: List<Track>) : DialogState
+    data class PlaylistCover(val id: Long) : DialogState
 }
 
 @Composable
-fun AppRoot(app: NeoMusicApp) {
+fun AppRoot(app: NeoMusicApp, startDestination: String = "home") {
     val nav = rememberNavController()
     val scope = rememberCoroutineScope()
     val library by app.repository.library.collectAsStateWithLifecycle()
@@ -142,6 +146,17 @@ fun AppRoot(app: NeoMusicApp) {
         }
     }
 
+    // ---- Custom playlist covers from the system photo picker (no storage permission needed)
+    var pendingCoverId by remember { mutableStateOf<Long?>(null) }
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        val id = pendingCoverId
+        pendingCoverId = null
+        if (uri != null && id != null) scope.launch {
+            if (app.playlists.importCoverImage(id, uri)) messages.show("Cover updated")
+            else messages.show("Couldn't read that image")
+        }
+    }
+
     val actions = remember {
         object : AppActions {
             private fun go(route: String) {
@@ -186,6 +201,10 @@ fun AppRoot(app: NeoMusicApp) {
                 dialog = DialogState.DeletePlaylist(id, p.name)
             }
 
+            override fun changePlaylistCover(id: Long) {
+                dialog = DialogState.PlaylistCover(id)
+            }
+
             override fun toast(message: String) = messages.show(message)
         }
     }
@@ -194,8 +213,11 @@ fun AppRoot(app: NeoMusicApp) {
         if (showQueue) showQueue = false else settleSheet(0f)
     }
 
+    // The track picker has its own bottom action bar, so the mini player steps aside there.
+    val route = nav.currentBackStackEntryAsState().value?.destination?.route
+    val showMiniPlayer = currentTrack != null && route?.startsWith("pick/") != true
     val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val bottomInset: Dp = navInset + if (currentTrack != null) MiniPlayerHeight + 20.dp else 0.dp
+    val bottomInset: Dp = navInset + if (showMiniPlayer) MiniPlayerHeight + 20.dp else 0.dp
 
     CompositionLocalProvider(LocalApp provides app, LocalActions provides actions, LocalBottomInset provides bottomInset) {
         BoxWithConstraints(Modifier.fillMaxSize().background(Neo.colors.paper)) {
@@ -203,7 +225,7 @@ fun AppRoot(app: NeoMusicApp) {
 
             NavHost(
                 navController = nav,
-                startDestination = "home",
+                startDestination = startDestination,
                 modifier = Modifier.fillMaxSize(),
                 enterTransition = { slideInHorizontally(tween(280)) { it / 4 } + fadeIn(tween(220)) },
                 exitTransition = { slideOutHorizontally(tween(280)) { -it / 6 } + fadeOut(tween(200)) },
@@ -245,7 +267,7 @@ fun AppRoot(app: NeoMusicApp) {
                 }
 
                 // Mini player
-                if (sheet < 1f) {
+                if (sheet < 1f && showMiniPlayer) {
                     MiniPlayer(
                         currentTrack,
                         Modifier
@@ -352,6 +374,28 @@ fun AppRoot(app: NeoMusicApp) {
                 onDismiss = { dialog = null },
                 onConfirm = { dialog = null; performDelete(d.tracks) },
             )
+            is DialogState.PlaylistCover -> {
+                val playlists by app.playlists.playlists.collectAsStateWithLifecycle()
+                val p = playlists.firstOrNull { it.id == d.id }
+                if (p == null) LaunchedEffect(Unit) { dialog = null } // playlist was deleted
+                else {
+                    val albums = remember(p.trackIds, library) {
+                        p.trackIds.mapNotNull { library.trackById[it]?.albumId }.distinct()
+                            .mapNotNull { library.albumById[it] }
+                    }
+                    PlaylistCoverDialog(
+                        p, albums,
+                        onDismiss = { dialog = null },
+                        onGallery = {
+                            dialog = null
+                            pendingCoverId = p.id
+                            photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        },
+                        onAlbum = { albumId -> app.playlists.setCoverAlbum(p.id, albumId); dialog = null },
+                        onAutomatic = { app.playlists.resetCover(p.id); dialog = null },
+                    )
+                }
+            }
             null -> Unit
         }
     }

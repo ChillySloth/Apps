@@ -19,6 +19,7 @@ interface AppActions {
     fun createPlaylist(initialTracks: List<Track> = emptyList(), openAfter: Boolean = false)
     fun renamePlaylist(id: Long)
     fun deletePlaylist(id: Long)
+    fun changePlaylistCover(id: Long)
     fun toast(message: String)
 }
 

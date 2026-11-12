@@ -29,6 +29,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.Edit
@@ -72,6 +73,7 @@ import com.chillysloth.neomusic.ui.components.NeoMenu
 import com.chillysloth.neomusic.ui.components.NeoMenuItem
 import com.chillysloth.neomusic.ui.components.NeoTag
 import com.chillysloth.neomusic.ui.components.PlaylistCover
+import com.chillysloth.neomusic.ui.components.ScrollbarBox
 import com.chillysloth.neomusic.ui.components.SectionTitle
 import com.chillysloth.neomusic.ui.components.SortButton
 import com.chillysloth.neomusic.ui.components.TrackRow
@@ -103,7 +105,7 @@ fun DetailScaffold(
             )
             actions?.invoke()
         }
-        Box(Modifier.weight(1f)) { content() }
+        ScrollbarBox(listState, Modifier.weight(1f)) { content() }
     }
 }
 
@@ -120,6 +122,7 @@ fun CollectionHero(
     enabled: Boolean,
     cover: @Composable (Modifier) -> Unit,
     extra: (@Composable () -> Unit)? = null,
+    onEditCover: (() -> Unit)? = null,
 ) {
     Column(
         Modifier.fillMaxWidth().padding(horizontal = 24.dp),
@@ -127,9 +130,19 @@ fun CollectionHero(
     ) {
         Spacer(Modifier.height(8.dp))
         Box {
-            NeoBox(Modifier.size(232.dp), shape = coverShape, shadow = 8.dp, borderWidth = 3.dp) {
+            NeoBox(
+                Modifier.size(232.dp), shape = coverShape, shadow = 8.dp, borderWidth = 3.dp,
+                onClick = onEditCover, onClickLabel = onEditCover?.let { "Change cover" },
+            ) {
                 cover(Modifier.fillMaxSize())
             }
+            if (onEditCover != null) NeoIconButton(
+                Icons.Rounded.AddPhotoAlternate, "Change cover", onEditCover,
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .graphicsLayer { translationX = 14.dp.toPx(); translationY = 14.dp.toPx() },
+                color = Neo.colors.yellow,
+            )
             NeoTag(
                 tag, tagColor,
                 Modifier
@@ -337,6 +350,7 @@ fun PlaylistScreen(playlistId: Long) {
             NeoMenu(open, { open = false }) {
                 NeoMenuItem("Add tracks", Icons.AutoMirrored.Rounded.PlaylistAdd, { open = false; actions.openTrackPicker(playlistId) })
                 NeoMenuItem("Rename", Icons.Rounded.Edit, { open = false; actions.renamePlaylist(playlistId) })
+                NeoMenuItem("Change cover", Icons.Rounded.AddPhotoAlternate, { open = false; actions.changePlaylistCover(playlistId) })
                 NeoMenuItem("Delete playlist", Icons.Rounded.DeleteOutline, { open = false; actions.deletePlaylist(playlistId) })
             }
         }
@@ -351,7 +365,8 @@ fun PlaylistScreen(playlistId: Long) {
                     onPlay = { actions.play(sorted, shuffle = false) },
                     onShuffle = { actions.play(sorted, shuffle = true) },
                     enabled = tracks.isNotEmpty(),
-                    cover = { PlaylistCover(tracks.map { t -> t.albumId }, playlist.id, it, sizeHint = 300.dp) },
+                    cover = { PlaylistCover(playlist, tracks.map { t -> t.albumId }, it, sizeHint = 300.dp) },
+                    onEditCover = { actions.changePlaylistCover(playlistId) },
                 )
             }
             item(key = "controls") {

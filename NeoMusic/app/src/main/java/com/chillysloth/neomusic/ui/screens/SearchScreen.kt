@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -54,6 +55,7 @@ import com.chillysloth.neomusic.ui.components.NeoBox
 import com.chillysloth.neomusic.ui.components.NeoIconButton
 import com.chillysloth.neomusic.ui.components.NeoTextField
 import com.chillysloth.neomusic.ui.components.PlainIconButton
+import com.chillysloth.neomusic.ui.components.ScrollbarBox
 import com.chillysloth.neomusic.ui.components.SectionTitle
 import com.chillysloth.neomusic.ui.components.TrackRow
 import com.chillysloth.neomusic.ui.theme.Neo
@@ -73,6 +75,7 @@ fun SearchScreen() {
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     LaunchedEffect(Unit) { focus.requestFocus() }
+    val searchState = rememberLazyListState()
 
     val q = remember(query) { normalizeForSearch(query.trim()) }
     val tracks = remember(q, library) {
@@ -120,8 +123,10 @@ fun SearchScreen() {
             tracks.isEmpty() && albums.isEmpty() && artists.isEmpty() -> EmptyState(
                 "Nothing found", "No matches for \"${query.trim()}\".", Icons.Rounded.SearchOff, color = Neo.colors.orange,
             )
-            else -> LazyColumn(
+            else -> ScrollbarBox(searchState, Modifier.fillMaxSize()) {
+            LazyColumn(
                 Modifier.fillMaxSize(),
+                state = searchState,
                 contentPadding = PaddingValues(bottom = LocalBottomInset.current + 16.dp),
             ) {
                 if (artists.isNotEmpty()) {
@@ -187,6 +192,7 @@ fun SearchScreen() {
                         )
                     }
                 }
+            }
             }
         }
     }

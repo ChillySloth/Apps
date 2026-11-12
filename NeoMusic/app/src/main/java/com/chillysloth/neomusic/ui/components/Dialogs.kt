@@ -1,6 +1,18 @@
 package com.chillysloth.neomusic.ui.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.material.icons.rounded.AddPhotoAlternate
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -75,8 +87,8 @@ fun AddToPlaylistDialog(
                     ) {
                         NeoBox(Modifier.size(44.dp), shape = RoundedCornerShape(8.dp), shadow = 2.dp, borderWidth = 2.dp) {
                             PlaylistCover(
-                                p.trackIds.mapNotNull { library.trackById[it]?.albumId },
-                                p.id, Modifier.size(44.dp), sizeHint = 44.dp,
+                                p, p.trackIds.mapNotNull { library.trackById[it]?.albumId },
+                                Modifier.size(44.dp), sizeHint = 44.dp,
                             )
                         }
                         Spacer(Modifier.width(12.dp))
@@ -172,3 +184,68 @@ fun MessageBanner(text: String, modifier: Modifier = Modifier) {
     }
 }
 
+
+/** Choose a playlist cover: a gallery photo, one of the playlist's album covers, or automatic. */
+@Composable
+fun PlaylistCoverDialog(
+    playlist: Playlist,
+    albums: List<com.chillysloth.neomusic.data.Album>,
+    onDismiss: () -> Unit,
+    onGallery: () -> Unit,
+    onAlbum: (Long) -> Unit,
+    onAutomatic: () -> Unit,
+) {
+    val isAuto = playlist.coverImage == null && playlist.coverAlbumId == null
+    NeoDialog("Playlist cover", onDismiss, accent = Neo.colors.pink) {
+        NeoButton(
+            "Choose from gallery", onGallery,
+            icon = Icons.Rounded.AddPhotoAlternate, color = Neo.colors.yellow,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(Neo.dimens.radiusSmall),
+        )
+        Spacer(Modifier.height(12.dp))
+        NeoButton(
+            if (isAuto) "Automatic (current)" else "Automatic", onAutomatic,
+            icon = if (isAuto) Icons.Rounded.Check else Icons.Rounded.GridView,
+            color = if (isAuto) Neo.colors.green else Neo.colors.surface,
+            textColor = if (isAuto) Neo.colors.onAccent else Neo.colors.text,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(Neo.dimens.radiusSmall),
+        )
+        if (albums.isNotEmpty()) {
+            Spacer(Modifier.height(18.dp))
+            Text("OR USE AN ALBUM COVER", style = Neo.type.caption, color = Neo.colors.textMuted)
+            Spacer(Modifier.height(10.dp))
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                modifier = Modifier.heightIn(max = 300.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(end = 4.dp, bottom = 4.dp),
+            ) {
+                gridItems(albums, key = { it.id }) { album ->
+                    val selected = playlist.coverAlbumId == album.id && playlist.coverImage == null
+                    Box(
+                        Modifier
+                            .aspectRatio(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .border(if (selected) 4.dp else 2.dp, Neo.colors.ink, RoundedCornerShape(10.dp))
+                            .clickable(onClickLabel = album.title) { onAlbum(album.id) }
+                    ) {
+                        Artwork(album.id, Modifier.fillMaxSize(), sizeHint = 90.dp)
+                        if (selected) Box(
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(5.dp)
+                                .size(22.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(Neo.colors.green)
+                                .border(2.dp, Neo.colors.ink, RoundedCornerShape(50)),
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(Icons.Rounded.Check, "Selected", tint = Neo.colors.onAccent, modifier = Modifier.size(14.dp)) }
+                    }
+                }
+            }
+        }
+    }
+}

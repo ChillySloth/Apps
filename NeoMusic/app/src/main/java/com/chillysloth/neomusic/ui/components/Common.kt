@@ -26,6 +26,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -35,7 +36,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.chillysloth.neomusic.data.Playlist
 import com.chillysloth.neomusic.data.SortSpec
+import com.chillysloth.neomusic.ui.LocalApp
 import com.chillysloth.neomusic.ui.theme.Neo
 
 /**
@@ -133,11 +136,47 @@ fun <T : Enum<T>> SortButton(
 }
 
 /**
- * Playlist cover: a 2×2 mosaic of album covers when there are enough distinct
- * albums, a single cover otherwise, or a flat colored block for empty playlists.
+ * Playlist cover. Uses, in order: a custom image the user picked, an album cover the
+ * user picked, a 2×2 mosaic of album covers, a single cover, or a flat colored block.
  */
 @Composable
-fun PlaylistCover(albumIds: List<Long>, playlistId: Long, modifier: Modifier = Modifier, sizeHint: androidx.compose.ui.unit.Dp = 56.dp) {
+fun PlaylistCover(
+    playlist: Playlist,
+    albumIds: List<Long>,
+    modifier: Modifier = Modifier,
+    sizeHint: androidx.compose.ui.unit.Dp = 56.dp,
+) {
+    val image = playlist.coverImage
+    when {
+        image != null -> CustomCover(image, modifier, sizeHint) { AutoCover(albumIds, playlist.id, modifier, sizeHint) }
+        playlist.coverAlbumId != null -> Artwork(playlist.coverAlbumId, modifier, sizeHint = sizeHint)
+        else -> AutoCover(albumIds, playlist.id, modifier, sizeHint)
+    }
+}
+
+@Composable
+private fun CustomCover(name: String, modifier: Modifier, sizeHint: androidx.compose.ui.unit.Dp, fallback: @Composable () -> Unit) {
+    val app = LocalApp.current
+    val file = remember(name) { app.playlists.coverFile(name) }
+    val px = with(androidx.compose.ui.platform.LocalDensity.current) { sizeHint.roundToPx() }
+    var loaded by remember(name) { mutableStateOf(false) }
+    val img by produceState(app.artwork.cachedFile(file, px), name, px) {
+        if (value == null) value = app.artwork.loadFile(file, px)
+        loaded = true
+    }
+    val bitmap = img
+    when {
+        bitmap != null -> androidx.compose.foundation.Image(
+            bitmap, contentDescription = null,
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = modifier,
+        )
+        loaded -> fallback() // file missing or unreadable
+        else -> Box(modifier.background(Neo.colors.surfaceAlt))
+    }
+}
+
+@Composable
+private fun AutoCover(albumIds: List<Long>, playlistId: Long, modifier: Modifier, sizeHint: androidx.compose.ui.unit.Dp) {
     val distinct = remember(albumIds) { albumIds.distinct().take(4) }
     when {
         distinct.size >= 4 -> Column(modifier) {

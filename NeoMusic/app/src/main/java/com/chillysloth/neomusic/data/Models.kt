@@ -51,6 +51,10 @@ data class Playlist(
     val trackIds: List<Long>,
     val createdAt: Long,
     val modifiedAt: Long,
+    /** Album whose art is used as the cover, chosen by the user. */
+    val coverAlbumId: Long? = null,
+    /** File name (in app storage) of a custom cover image picked from the gallery. */
+    val coverImage: String? = null,
 )
 
 data class Library(

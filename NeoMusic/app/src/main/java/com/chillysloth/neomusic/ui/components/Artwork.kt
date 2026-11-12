@@ -61,6 +61,30 @@ class ArtworkLoader(private val context: Context) {
         return img
     }
 
+    fun cachedFile(file: java.io.File, sizePx: Int): ImageBitmap? = cache.get(fileKey(file, sizePx)) as? ImageBitmap
+
+    private fun fileKey(file: java.io.File, sizePx: Int) = "file:${file.name}@${bucket(sizePx)}"
+
+    /** Loads an image file from app storage (custom playlist covers). */
+    suspend fun loadFile(file: java.io.File, sizePx: Int): ImageBitmap? {
+        val k = fileKey(file, sizePx)
+        cache.get(k)?.let { return it as? ImageBitmap }
+        val px = bucket(sizePx)
+        val bmp = withContext(Dispatchers.IO) {
+            runCatching {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(file.path, bounds)
+                var sample = 1
+                while (bounds.outWidth / (sample * 2) >= px && bounds.outHeight / (sample * 2) >= px) sample *= 2
+                BitmapFactory.decodeFile(file.path, BitmapFactory.Options().apply { inSampleSize = sample })
+            }.getOrNull()
+        }
+        val img = bmp?.asImageBitmap()
+        // Don't cache a miss: the file may still be being written.
+        if (img != null) cache.put(k, img)
+        return img
+    }
+
     private fun decode(albumId: Long, px: Int): Bitmap? {
         val resolver = context.contentResolver
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

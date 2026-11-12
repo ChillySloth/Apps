@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
@@ -45,6 +46,8 @@ import com.chillysloth.neomusic.ui.components.NeoButton
 import com.chillysloth.neomusic.ui.components.NeoIconButton
 import com.chillysloth.neomusic.ui.components.NeoTextField
 import com.chillysloth.neomusic.ui.components.PlainIconButton
+import com.chillysloth.neomusic.ui.components.ScrollbarBox
+import com.chillysloth.neomusic.ui.components.initialOf
 import com.chillysloth.neomusic.ui.theme.Neo
 
 /** Multi-select list of all tracks, used for "Add tracks" on a playlist page. */
@@ -64,6 +67,15 @@ fun TrackPickerScreen(playlistId: Long) {
         else library.tracks.filter { normalizeForSearch(it.title + " " + it.artist + " " + it.album).contains(q) }
     }
 
+    val confirm = {
+        if (selected.isNotEmpty()) {
+            val n = app.playlists.addTracks(playlistId, selected.toList())
+            actions.toast(if (n == 1) "Added 1 track" else "Added $n tracks")
+        }
+        actions.back()
+    }
+    val listState = rememberLazyListState()
+
     Column(Modifier.fillMaxSize().background(Neo.colors.paper).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             NeoIconButton(Icons.Rounded.Close, "Cancel", actions::back)
@@ -72,6 +84,15 @@ fun TrackPickerScreen(playlistId: Long) {
                 Text("Add tracks", style = Neo.type.h2, color = Neo.colors.text)
                 Text("to ${playlist?.name ?: "playlist"}", style = Neo.type.caption, color = Neo.colors.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            // Confirm is also up here so it's always reachable, whatever is at the bottom of the screen.
+            NeoButton(
+                if (selected.isEmpty()) "Done" else "Add ${selected.size}",
+                confirm,
+                icon = Icons.Rounded.Check,
+                color = if (selected.isEmpty()) Neo.colors.surface else Neo.colors.yellow,
+                textColor = if (selected.isEmpty()) Neo.colors.text else Neo.colors.onAccent,
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+            )
         }
         NeoTextField(
             query, { query = it }, "Filter tracks",
@@ -79,7 +100,8 @@ fun TrackPickerScreen(playlistId: Long) {
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
             trailing = if (query.isNotEmpty()) ({ PlainIconButton(Icons.Rounded.Close, "Clear", { query = "" }, size = 36.dp) }) else null,
         )
-        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(vertical = 8.dp)) {
+        ScrollbarBox(listState, Modifier.weight(1f), bottomPadding = 0.dp, label = { i -> visible.getOrNull(i)?.let { initialOf(it.title) } }) {
+        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(vertical = 8.dp)) {
             items(visible, key = { it.id }) { t ->
                 val already = t.id in existing
                 val checked = already || t.id in selected
@@ -119,6 +141,7 @@ fun TrackPickerScreen(playlistId: Long) {
                 }
             }
         }
+        }
         Row(
             Modifier
                 .fillMaxWidth()
@@ -129,13 +152,7 @@ fun TrackPickerScreen(playlistId: Long) {
             Text("${selected.size} selected", style = Neo.type.label, color = Neo.colors.text, modifier = Modifier.weight(1f))
             NeoButton(
                 "Add to playlist",
-                {
-                    if (selected.isNotEmpty()) {
-                        val n = app.playlists.addTracks(playlistId, selected.toList())
-                        actions.toast(if (n == 1) "Added 1 track" else "Added $n tracks")
-                    }
-                    actions.back()
-                },
+                confirm,
                 color = if (selected.isEmpty()) Neo.colors.surfaceAlt else Neo.colors.yellow,
                 icon = Icons.Rounded.Check,
             )

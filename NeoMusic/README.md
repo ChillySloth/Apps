@@ -10,7 +10,9 @@ An offline music player for Android with a **neubrutalist** look (flat bold colo
 
 - **Home with 4 tabs** — Tracks, Playlists, Albums, Artists. Swipe left/right to switch tabs. The large "MUSIC" title collapses as you scroll, One UI style.
 - **Tracks**: Play all, Shuffle, sort by title / artist / album / date added / duration / year (ascending or descending).
-- **Playlists**: create, rename, delete. Sort by name, date created, date modified, track count, or **Custom order** (drag the ≡ handle to rearrange playlists). Each playlist page has a cover (2×2 mosaic), Play, Shuffle, "Add tracks" picker, and its own sort, including a custom drag-to-reorder track order.
+- **Playlists**: create, rename, delete. Sort by name, date created, date modified, track count, or **Custom order** (drag the ≡ handle to rearrange playlists). Each playlist page has a cover, Play, Shuffle, an "Add tracks" picker (with confirm buttons at the top and bottom), and its own sort, including a custom drag-to-reorder track order.
+- **Playlist covers**: tap the cover (or ⋮ → Change cover) to pick a photo from your gallery, use one of the playlist's album covers, or go back to the automatic 2×2 mosaic.
+- **Fast scroll bar** on every list: drag the handle on the right edge to jump through long lists. A bubble shows where you are (first letter, year, etc., following the current sort).
 - **Albums** (grid) and **Artists** (list), each with a detail page: cover, Play and Shuffle buttons.
 - **Track ⋮ menu** everywhere: Add to playlist · Album · Artist · Delete · Track details. Inside a playlist there's also Remove from playlist.
 - **Track details**: title, artist, album, duration, record date, full file location, plus folder, format, size, bitrate, sample rate, genre and date added.
