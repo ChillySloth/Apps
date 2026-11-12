@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- hard offset shadow -->
+    <path android:fillColor="#111111"
+        android:pathData="M58,30 a24,24 0 1,1 -0.01,0 z" />
+    <!-- record -->
+    <path android:fillColor="#111111" android:strokeColor="#111111" android:strokeWidth="3"
+        android:pathData="M54,26 a24,24 0 1,1 -0.01,0 z" />
+    <path android:strokeColor="#3A3A3A" android:strokeWidth="1.5"
+        android:pathData="M54,33 a17,17 0 1,1 -0.01,0 z" />
+    <!-- label -->
+    <path android:fillColor="#FF90E8" android:strokeColor="#111111" android:strokeWidth="3"
+        android:pathData="M54,41 a9,9 0 1,1 -0.01,0 z" />
+    <path android:fillColor="#111111"
+        android:pathData="M54,47.5 a2.5,2.5 0 1,1 -0.01,0 z" />
+</vector>
